@@ -1,8 +1,9 @@
 # Kaggle
 # DRW - Crypto Market Prediction
-
 https://www.kaggle.com/competitions/drw-crypto-market-prediction/overview
+
 ---
+
 ## 기술 스택
 
 * **Language**: Python
@@ -14,7 +15,9 @@ https://www.kaggle.com/competitions/drw-crypto-market-prediction/overview
 * **Cross-validation**: TimeSeriesSplit (Scikit-learn)
 * **OS**: Linux (Ubuntu Desktop 24.04 LTS)
 * **IDE**: VSCode, Jupyter Notebook
+
 ---
+
 ## 프로젝트 개요
 
 Kaggle의 암호화폐 거래 데이터 예측 대회에 참가하여 **상위 11%** 성적을 거두었습니다.
