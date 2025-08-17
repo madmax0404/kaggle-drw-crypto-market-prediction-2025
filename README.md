@@ -6,15 +6,15 @@ https://www.kaggle.com/competitions/drw-crypto-market-prediction/overview
 
 ## 기술 스택
 
-* **Language**: Python
-* **ML Models**: XGBoost, LightGBM, CatBoost
-* **Hyperparameter Tuning**: Optuna
-* **Feature Selection**: SHAP
-* **Data Manipulation & Analysis:** Pandas, NumPy, itertools
-* **Visualization**: Matplotlib, Seaborn, Optuna Dashboard
-* **Cross-validation**: TimeSeriesSplit (Scikit-learn)
-* **OS**: Linux (Ubuntu Desktop 24.04 LTS)
-* **IDE**: VSCode, Jupyter Notebook
+- **Language**: Python
+- **ML Models**: XGBoost, LightGBM, CatBoost
+- **Hyperparameter Tuning**: Optuna
+- **Feature Selection**: SHAP
+- **Data Manipulation & Analysis:** Pandas, NumPy, itertools
+- **Visualization**: Matplotlib, Seaborn, Optuna Dashboard
+- **Cross-validation**: TimeSeriesSplit (Scikit-learn)
+- **OS**: Linux (Ubuntu Desktop 24.04 LTS)
+- **IDE**: VSCode, Jupyter Notebook
 
 ---
 
@@ -60,8 +60,8 @@ The training dataset containing all historical market data along with the corres
 
 테스트 데이터셋은 train.parquet과 동일한 특징 구조를 가지지만, 다음과 같은 차이가 있습니다:
 
-* **timestamp:** 미래 데이터를 미리 알 수 없도록 모든 타임스탬프가 마스킹되고, 셔플된 후 고유 ID로 대체됨.
-* **label:** 테스트 세트의 모든 레이블은 0으로 설정됨.
+- **timestamp:** 미래 데이터를 미리 알 수 없도록 모든 타임스탬프가 마스킹되고, 셔플된 후 고유 ID로 대체됨.
+- **label:** 테스트 세트의 모든 레이블은 0으로 설정됨.
 
 **sample_submission.csv**
 
@@ -71,137 +71,93 @@ The training dataset containing all historical market data along with the corres
 
 ## 방법론 및 접근 방식
 
-### 특징
-- 자동화된 하이퍼파라미터 탐색을 위한 최첨단 오픈 소스 라이브러리인 **Optuna**를 사용하여 하이퍼파라미터 튜닝을 진행했습니다. https://optuna.org/
-- 머신러닝 모델 결과 설명을 위한 최첨단 오픈 소스 라이브러리인 **SHAP**(SHapley Additive exPlanations)을 Feature Selection에 사용. https://shap.readthedocs.io/
+본 프로젝트는 포괄적인 머신러닝 파이프라인을 설계하여 데이터 전처리, 피처 엔지니어링, 모델링, 튜닝, 앙상블까지 전체 과정을 체계적으로 수행했습니다.
 
-본 프로젝트는 포괄적인 머신러닝 파이프라인을 따랐습니다.
+### 1. 데이터 전처리 & Feature Pruning
+- 상수값/중복/저분산 컬럼 제거
+- Pearson Corr > 0.9 피처 중 하나 제거
 
-1.  **데이터 로드 및 초기 탐색:**
-    - pandas 라이브러리를 사용하여 parquet 파일들을 로드하고, 초기 건전성 검사(sanity checks)와 EDA(Exploratory Data Analysis)를 통해 기본적인 통계 분석을 수행했습니다.
+### 2. Feature Selection & Engineering
+- **SHAP + LightGBM + TimeSeriesSplit**으로 중요도 기반 선택  
+- Top 20 피처 중심으로 row-wise, nonlinear, interaction engineering 진행  
+- 최종적으로 상위 200개 피처 선정  
+*(세부 코드는 `/drw2025/1_feature_engineering_and_selection_lgb.ipynb` 참고)*
 
-2.  **데이터 전처리, Feature Engineering 및 Feature Selection 주요 내용:**
-    - **Feature Pruning:**
-      - 상수값 컬럼, 중복 컬럼, 낮은 분산 컬럼을 제거했습니다.
-      - Pearson Correlation Coefficient > 0.9인 두 feature 중 하나를 제거하여 다중공선성을 완화했습니다.
-    - **Feature Importance 기반 선택:**
-      - 머신러닝 모델 결과 설명을 위한 최첨단 오픈 소스 라이브러리인 **SHAP**(SHapley Additive exPlanations)을 사용하였습니다. https://shap.readthedocs.io/
-      - TimeSeriesSplit + LightGBM + SHAP을 활용하여 중요도가 0인 피처를 제거했습니다.
-      - Top 20개의 핵심 feature를 우선 선별하였습니다.
+![SHAP feature importance](images/feature_importance.png)
 
-      #### SHAP 기반 Feature Importance
-      > ![SHAP feature importance](<images/feature_importance.png>)
+*Figure 1. SHAP 기반 Feature Importance*
 
-    - **Feature Engineering:**  
-      - **Row-wise:**
-         ```
-         def row_wise_feat_engi(df):
-             df = df.copy()
-             new_features = {}
-         
-             new_features['row_mean'] = df[feature_list].mean(axis=1)
-             new_features['row_std'] = df[feature_list].std(axis=1)
-             new_features['row_max'] = df[feature_list].max(axis=1)
-             new_features['row_min'] = df[feature_list].min(axis=1)
-             new_features['row_sum'] = df[feature_list].sum(axis=1)
-         
-             for i in tqdm(range(19)):
-                 nth = round(0.05 + i * 0.05, 2)
-                 new_features['row_{}_quantile'.format(nth)] = df[feature_list].quantile(q=nth, axis=1)
-         
-             new_feats_df = pd.DataFrame(new_features, index=df.index)
-             result_df = pd.concat([df, new_feats_df], axis=1)
-         
-             return result_df.copy()
-         ```
-      - **Nonlinear:**
-         ```
-         def nonlinear_feat_engi(df):
-             df = df.copy()
-             new_features = {}
-         
-             for f in tqdm(top_20_features_list):
-                 new_features["{}_percentile_rank".format(f)] = df[f].rank(pct=True)
-                 new_features["{}_square".format(f)] = df[f].apply(lambda x: x**2)
-                 new_features["{}_cube".format(f)] = df[f].apply(lambda x: x**3)
-                 new_features["{}_sqrt".format(f)] = df[f].apply(lambda x: np.sqrt(np.abs(x)))
-                 new_features["{}_log1p".format(f)] = df[f].apply(lambda x: np.log1p(np.abs(x)))
-                 new_features["{}_exp".format(f)] = df[f].apply(lambda x: np.exp(x))
-                 new_features["{}_sin".format(f)] = df[f].apply(lambda x: np.sin(x))
-                 new_features["{}_cos".format(f)] = df[f].apply(lambda x: np.cos(x))
-                 new_features["{}_tanh".format(f)] = df[f].apply(lambda x: np.tanh(x))
-                 new_features["{}_abs".format(f)] = df[f].apply(lambda x: np.abs(x))
-             
-             new_feats_df = pd.DataFrame(new_features, index=df.index)
-             result_df = pd.concat([df, new_feats_df], axis=1)
-         
-             return result_df.copy()
-         ```
-      - **Interaction:**
-         ```
-         def interaction_feat_engi(df):
-             df = df.copy()
-             new_features = {}
-         
-             for f1, f2 in combinations(top_20_features_list, 2):
-                 new_features[f'{f1}_{f2}_prod'] = df[f1] * df[f2]
-                 new_features[f'{f1}_{f2}_sum'] = df[f1] + df[f2]
-                 new_features[f'{f1}_{f2}_diff'] = df[f1] - df[f2]
-                 new_features[f'{f1}_{f2}_ratio'] = df[f1] / (df[f2] + 1e-5)
-                 new_features[f'{f1}_{f2}_max'] = df[[f1, f2]].max(axis=1)
-                 new_features[f'{f1}_{f2}_min'] = df[[f1, f2]].min(axis=1)
-                 new_features[f'{f1}_{f2}_absdiff'] = np.abs(df[f1] - df[f2])
-         
-             new_feats_df = pd.DataFrame(new_features, index=df.index)
-             result_df = pd.concat([df, new_feats_df], axis=1)
-         
-             return result_df.copy()
-         ```
-    - **Feature Selection:**
-      - Feature engineering 이후 다시 SHAP 기반 중요도 분석을 수행하였습니다.
-      - 상위 200개 feature를 우선 선택하여 하이퍼파라미터 튜닝에 사용했습니다.
+### 3. 모델 학습 & 검증
+- XGBoost, LightGBM, CatBoost 등 GBDT 계열 사용
+- TimeSeriesSplit 기반 검증, RMSE 손실로 성능 모니터링
+- 과적합 방지: early stopping, L1/L2 regularization
 
-4.  **모델 선택:**
-    * XGBoost, LightGBM, Catboost와 같은 GBDT 모델들을 사용했습니다.
+![Learning Curve](images/learning_curve.png)
 
-5.  **훈련 및 검증:**
-    * TimeSeriesSplit를 활용하여 모델의 일반화를 보장했습니다.
-    * RMSE 손실을 사용하여 훈련 진행 상황을 모니터링했습니다.
-    * 과적합을 방지하기 위한 기술(예: 드롭아웃, 조기 종료, L1/L2 정규화)을 적용했습니다.
-  
-    #### Training and Validation RMSE Loss Curves
+*Figure 2. Training & Validation Learning Curves*
 
-    > ![Learning Curve](<images/learning_curve.png>)
-  
-7.  **하이퍼파라미터 튜닝 및 Feature Selection:**
-    - 자동화된 하이퍼파라미터 탐색을 위한 최첨단 오픈 소스 라이브러리인 **Optuna**를 사용하여 하이퍼파라미터 튜닝을 진행했습니다. https://optuna.org/
-    - Feature 갯수를 하이퍼파라미터에 포함시켜, 상위 200개의 feature 중 최적의 feature 갯수를 찾았습니다.
+### 4. Hyperparameter Tuning
+- **Optuna**로 자동화된 하이퍼파라미터 탐색 수행  
+- 피처 개수도 하이퍼파라미터에 포함하여 최적의 feature subset 탐색
 
-      #### LightGBM 하이퍼파라미터 튜닝:
-        
-      > ![Optuna 1](<images/LGB_Optuna_20250720_1.png>)
+![Optuna result](images/LGB_Optuna_20250720_1.png)
 
-      > ![Optuna 2](<images/LGB_Optuna_20250720_2.png>)
-      
-      > ![Optuna 3](<images/LGB_Optuna_20250720_3.png>)
-      
-      > ![Optuna 4](<images/LGB_Optuna_20250720_4.png>)
-      
-      > ![Optuna 5](<images/LGB_Optuna_20250720_5.png>)      
+*Figure 3. LightGBM Optuna 하이퍼파라미터 튜닝 Optuna Dashboard*
 
+### 5. Ensemble (Blending)
+- 각 모델의 예측을 CV 성능 기반 가중 평균  
+- 단일 모델 대비 CV 점수가 0.1509 → 0.1576로 개선
 
+![Blending Result](images/blending_result.png)
 
-8.  **Ensemble 및 모델 평가:**
-    * 튜닝된 하이퍼파라미터들을 사용한 각 모델들의 CV 점수를 바탕으로, 각 모델들의 예측치를 가중 평균하여 Blending 하였습니다.
-    * 이렇게 Ensemble 한 결과는 아래의 이미지에서 확인 가능하듯 유의미한 CV 점수의 향상을 보였습니다.
+*Figure 4. Ensemble 결과*
 
+---
 
+## 결과 및 주요 관찰
 
+- **달성한 Pearson 점수:** 제 모델은 최종 테스트 세트에서 0.08230의 Pearson 점수로 상위 11%를 달성하였습니다. 그러나 대회 상위 10개 팀의 점수가 0.11433인 점을 고려할 때, 주어진 데이터셋으로는 더 이상의 의미 있는 성능 개선은 어려워 보입니다.
+- **[핵심 관찰 1]:** CV와 LB의 큰 차이는 제 모델이 일반화에 실패하였으며, 개선의 여지가 있다는 것을 의미합니다.
+- **[핵심 관찰 2]:** 익명화되지 않은 데이터셋이라면 더 다양하고 높은 퀄리티의 Feature Engineering이 가능할 것이며, 이는 모델 성능의 향상으로 직결될 것입니다.
 
+---
 
+## 결론 및 향후 과제
 
+본 프로젝트는 암호화폐 시장 가격의 움직임을 예측하는 모델을 개발하려고 시도하였으며, Time Series 데이터를 다루고 머신러닝 기술을 적용하는 능숙함을 보여주었습니다. 얻어진 관찰은 암호화폐 가격 예측에 데이터 기반 접근 방식의 잠재력을 부각시킵니다.
 
+**향후 개선 사항:**
+* 전이 학습(transfer learning) 또는 데이터 증강(data augmentation)을 위한 외부 데이터셋 통합.
+* 임상 적용을 위해 모델 예측을 더욱 해석 가능하게 만드는 설명 가능한 AI(XAI) 기술 조사.
+* CV 점수(0.1576)와 LB 점수(0.0823) 간의 현저한 차이를 조사하는 것. 이는 과적합을 나타낼 수 있습니다.
+* 더 나은 앙상블 기법 적용.
+* 더 나은 CV 전략 구상.
 
+---
+
+## 프로젝트 실행 방법
+
+분석 및 모델 훈련 재현 방법:
+
+1.  **Repository 복제:**
+    ```bash
+    git clone [https://github.com/madmax0404/kaggle-drw-crypto-market-prediction-2025.git](https://github.com/madmax0404/kaggle-drw-crypto-market-prediction-2025.git)
+    cd kaggle-drw-crypto-market-prediction-2025
+    ```
+2.  **데이터셋 다운로드:**
+    * 캐글에서 대회에 참가하세요. [DRW - Crypto Market Prediction](https://www.kaggle.com/competitions/drw-crypto-market-prediction/)
+    * 데이터를 다운받은 후 알맞은 디렉토리에 저장하세요.
+3.  **가상 환경을 생성하고 필요한 라이브러리들을 설치해주세요:**
+    ```bash
+    conda create -n DRW python=3.12 # or venv
+    conda activate DRW
+    pip install -r requirements.txt
+    ```
+4.  **Jupyter Notebook을 실행해주세요:**
+    ```bash
+    jupyter notebook drw2025
+    ```
+    데이터 처리, 모델 훈련 및 평가를 실행하려면 노트북의 단계를 따르세요.
 
 
 
