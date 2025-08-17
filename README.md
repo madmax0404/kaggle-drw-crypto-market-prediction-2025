@@ -87,8 +87,11 @@ The training dataset containing all historical market data along with the corres
     - **Feature Importance 기반 선택:**
       - 머신러닝 모델 결과 설명을 위한 최첨단 오픈 소스 라이브러리인 **SHAP**(SHapley Additive exPlanations)을 사용하였습니다. https://shap.readthedocs.io/
       - TimeSeriesSplit + LightGBM + SHAP을 활용하여 중요도가 0인 피처를 제거했습니다.
-      - Top 20개의 핵심 피처를 우선 선별하였습니다.
-        ![SHAP feature importance](<images/feature_importance.png>)
+      - Top 20개의 핵심 feature를 우선 선별하였습니다.
+
+      #### SHAP 기반 Feature Importance
+      > ![SHAP feature importance](<images/feature_importance.png>)
+
     - **Feature Engineering:**  
       - **Row-wise:**
          ```
@@ -159,15 +162,21 @@ The training dataset containing all historical market data along with the corres
       - 상위 200개 feature를 우선 선택하여 하이퍼파라미터 튜닝에 사용했습니다.
 
 4.  **모델 선택:**
-    * XGBoost, LightGBM, Catboost와 같은 GBDT 모델을 사용했습니다.
+    * XGBoost, LightGBM, Catboost와 같은 GBDT 모델들을 사용했습니다.
 
 5.  **훈련 및 검증:**
     * TimeSeriesSplit를 활용하여 모델의 일반화를 보장했습니다.
     * RMSE 손실을 사용하여 훈련 진행 상황을 모니터링했습니다.
     * 과적합을 방지하기 위한 기술(예: 드롭아웃, 조기 종료, L1/L2 정규화)을 적용했습니다.
   
-6.  **하이퍼파라미터 튜닝 및 특징 선택:**
-    * 자동화된 하이퍼파라미터 탐색을 위한 최첨단 오픈 소스 라이브러리인 **Optuna**를 사용하여 하이퍼파라미터 튜닝을 진행했습니다. https://optuna.org/
+    #### Training and Validation RMSE Loss Curves
+
+    > ![Learning Curve](<images/learning_curve.png>)
+  
+7.  **하이퍼파라미터 튜닝 및 Feature Selection:**
+    - 자동화된 하이퍼파라미터 탐색을 위한 최첨단 오픈 소스 라이브러리인 **Optuna**를 사용하여 하이퍼파라미터 튜닝을 진행했습니다. https://optuna.org/
+    - Feature 갯수를 하이퍼파라미터에 포함시켜, 상위 200개의 feature 중 최적의 feature 갯수를 찾았습니다.
+
       #### LightGBM 하이퍼파라미터 튜닝:
         
       > ![Optuna 1](<images/LGB_Optuna_20250720_1.png>)
@@ -178,16 +187,13 @@ The training dataset containing all historical market data along with the corres
       
       > ![Optuna 4](<images/LGB_Optuna_20250720_4.png>)
       
-      > ![Optuna 5](<images/LGB_Optuna_20250720_5.png>)
+      > ![Optuna 5](<images/LGB_Optuna_20250720_5.png>)      
 
 
 
-    * 머신러닝 모델 결과 설명을 위한 최첨단 오픈 소스 라이브러리인 **SHAP(SHapley Additive exPlanations)**을 특징 선택에 사용했습니다. https://shap.readthedocs.io/
-        * ![SHAP feature importance](<images/feature_importance.png>)
-
-7.  **모델 평가:**
-    * 최종 모델의 성능을 주된 평가 지표인 **QWK(Quadratic Weighted Kappa)**를 사용하여 한 번도 보지 못한 테스트 세트로 평가했습니다.
-    * "SHAP을 사용하여 어떤 특징들이 예측에 가장 많이 기여했는지 이해하기 위한 해석 가능성 분석을 수행했습니다.
+8.  **Ensemble 및 모델 평가:**
+    * 튜닝된 하이퍼파라미터들을 사용한 각 모델들의 CV 점수를 바탕으로, 각 모델들의 예측치를 가중 평균하여 Blending 하였습니다.
+    * 이렇게 Ensemble 한 결과는 아래의 이미지에서 확인 가능하듯 유의미한 CV 점수의 향상을 보였습니다.
 
 
 
