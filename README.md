@@ -71,37 +71,121 @@ The training dataset containing all historical market data along with the corres
 
 ## 방법론 및 접근 방식
 
-본 프로젝트는 포괄적인 머신러닝 파이프라인을 따랐습니다:
+### 특징
+- 자동화된 하이퍼파라미터 탐색을 위한 최첨단 오픈 소스 라이브러리인 **Optuna**를 사용하여 하이퍼파라미터 튜닝을 진행했습니다. https://optuna.org/
+- 머신러닝 모델 결과 설명을 위한 최첨단 오픈 소스 라이브러리인 **SHAP**(SHapley Additive exPlanations)을 Feature Selection에 사용. https://shap.readthedocs.io/
+
+본 프로젝트는 포괄적인 머신러닝 파이프라인을 따랐습니다.
 
 1.  **데이터 로드 및 초기 탐색:**
-    * pandas 라이브러리를 사용하여 parquet 파일들을 로드하고, 초기 건전성 검사(sanity checks)와 EDA(Exploratory Data Analysis)를 통해 기본적인 통계 분석을 수행했습니다.
+    - pandas 라이브러리를 사용하여 parquet 파일들을 로드하고, 초기 건전성 검사(sanity checks)와 EDA(Exploratory Data Analysis)를 통해 기본적인 통계 분석을 수행했습니다.
 
-2.  **데이터 전처리, Feature Engineering 및 Selection 주요 내용:**
-    * **전지 작업:** 800개에 근접하는 feature들을 축소시킬 필요가 있었습니다. .
-    * **표 형식 데이터:** 결측값을 처리하고, 범주형 특성을 인코딩하며, 의미 있는 특성(features)을 엔지니어링했습니다.
-    * **데이터 통합:** 활동량 측정 데이터에서 추출한 특징들과 인구 통계 및 행동 데이터를 모델 훈련을 위한 통합된 데이터셋으로 결합하기 위한 전략을 개발했습니다.
+2.  **데이터 전처리, Feature Engineering 및 Feature Selection 주요 내용:**
+    - **Feature Pruning:**
+      - 상수값 컬럼, 중복 컬럼, 낮은 분산 컬럼을 제거했습니다.
+      - Pearson Correlation Coefficient > 0.9인 두 feature 중 하나를 제거하여 다중공선성을 완화했습니다.
+    - **Feature Importance 기반 선택:**
+      - 머신러닝 모델 결과 설명을 위한 최첨단 오픈 소스 라이브러리인 **SHAP**(SHapley Additive exPlanations)을 사용하였습니다. https://shap.readthedocs.io/
+      - TimeSeriesSplit + LightGBM + SHAP을 활용하여 중요도가 0인 피처를 제거했습니다.
+      - Top 20개의 핵심 피처를 우선 선별하였습니다.
+        ![SHAP feature importance](<images/feature_importance.png>)
+    - **Feature Engineering:**  
+      - **Row-wise:**
+         ```
+         def row_wise_feat_engi(df):
+             df = df.copy()
+             new_features = {}
+         
+             new_features['row_mean'] = df[feature_list].mean(axis=1)
+             new_features['row_std'] = df[feature_list].std(axis=1)
+             new_features['row_max'] = df[feature_list].max(axis=1)
+             new_features['row_min'] = df[feature_list].min(axis=1)
+             new_features['row_sum'] = df[feature_list].sum(axis=1)
+         
+             for i in tqdm(range(19)):
+                 nth = round(0.05 + i * 0.05, 2)
+                 new_features['row_{}_quantile'.format(nth)] = df[feature_list].quantile(q=nth, axis=1)
+         
+             new_feats_df = pd.DataFrame(new_features, index=df.index)
+             result_df = pd.concat([df, new_feats_df], axis=1)
+         
+             return result_df.copy()
+         ```
+      - **Nonlinear:**
+         ```
+         def nonlinear_feat_engi(df):
+             df = df.copy()
+             new_features = {}
+         
+             for f in tqdm(top_20_features_list):
+                 new_features["{}_percentile_rank".format(f)] = df[f].rank(pct=True)
+                 new_features["{}_square".format(f)] = df[f].apply(lambda x: x**2)
+                 new_features["{}_cube".format(f)] = df[f].apply(lambda x: x**3)
+                 new_features["{}_sqrt".format(f)] = df[f].apply(lambda x: np.sqrt(np.abs(x)))
+                 new_features["{}_log1p".format(f)] = df[f].apply(lambda x: np.log1p(np.abs(x)))
+                 new_features["{}_exp".format(f)] = df[f].apply(lambda x: np.exp(x))
+                 new_features["{}_sin".format(f)] = df[f].apply(lambda x: np.sin(x))
+                 new_features["{}_cos".format(f)] = df[f].apply(lambda x: np.cos(x))
+                 new_features["{}_tanh".format(f)] = df[f].apply(lambda x: np.tanh(x))
+                 new_features["{}_abs".format(f)] = df[f].apply(lambda x: np.abs(x))
+             
+             new_feats_df = pd.DataFrame(new_features, index=df.index)
+             result_df = pd.concat([df, new_feats_df], axis=1)
+         
+             return result_df.copy()
+         ```
+      - **Interaction:**
+         ```
+         def interaction_feat_engi(df):
+             df = df.copy()
+             new_features = {}
+         
+             for f1, f2 in combinations(top_20_features_list, 2):
+                 new_features[f'{f1}_{f2}_prod'] = df[f1] * df[f2]
+                 new_features[f'{f1}_{f2}_sum'] = df[f1] + df[f2]
+                 new_features[f'{f1}_{f2}_diff'] = df[f1] - df[f2]
+                 new_features[f'{f1}_{f2}_ratio'] = df[f1] / (df[f2] + 1e-5)
+                 new_features[f'{f1}_{f2}_max'] = df[[f1, f2]].max(axis=1)
+                 new_features[f'{f1}_{f2}_min'] = df[[f1, f2]].min(axis=1)
+                 new_features[f'{f1}_{f2}_absdiff'] = np.abs(df[f1] - df[f2])
+         
+             new_feats_df = pd.DataFrame(new_features, index=df.index)
+             result_df = pd.concat([df, new_feats_df], axis=1)
+         
+             return result_df.copy()
+         ```
+    - **Feature Selection:**
+      - Feature engineering 이후 다시 SHAP 기반 중요도 분석을 수행하였습니다.
+      - 상위 200개 feature를 우선 선택하여 하이퍼파라미터 튜닝에 사용했습니다.
 
-3.  **모델 선택 및 아키텍처:**
-    * 분류에 적합한 다양한 머신러닝 모델을 탐색했습니다.
-    * XGBoost, LightGBM, Catboost와 같은 그래디언트 부스팅 결정 트리 모델을 사용하고 앙상블했습니다.
-    * 이 문제는 분류 문제이지만, 목표 변수가 순서형이기 때문에 회귀 모델을 사용했습니다. 예측값은 SciPy의 scipy.optimize.minimize 메서드를 사용하여 최적의 임계값을 찾아 클래스로 후처리되었습니다.
+4.  **모델 선택:**
+    * XGBoost, LightGBM, Catboost와 같은 GBDT 모델을 사용했습니다.
 
-4.  **훈련 및 검증:**
-    * StratifiedKFold를 활용하여 모델의 일반화를 보장했습니다.
-    * RMSE 손실 및 **Quadratic Weighted Kappa(QWK)**와 같은 지표를 사용하여 훈련 진행 상황을 모니터링했습니다.
+5.  **훈련 및 검증:**
+    * TimeSeriesSplit를 활용하여 모델의 일반화를 보장했습니다.
+    * RMSE 손실을 사용하여 훈련 진행 상황을 모니터링했습니다.
     * 과적합을 방지하기 위한 기술(예: 드롭아웃, 조기 종료, L1/L2 정규화)을 적용했습니다.
   
-5.  **하이퍼파라미터 튜닝 및 특징 선택:**
-    * 자동화된 하이퍼파라미터 탐색을 위한 최첨단 오픈 소스 라이브러리인 Optuna를 사용하여 하이퍼파라미터 튜닝을 진행했습니다. https://optuna.org/
-    * 예시 이미지들:
-        * ![Optuna Dashboard](<images/Screenshot from 2025-06-08 17-43-57.png>)
-        * ![Optuna hyperparameter tuning 1](<images/learning_rate_optuna_visualization.png>)
-        * ![Optuna hyperparameter tuning 2](<images/max_depth_optuna_visualization.png>)
-        * ![Optuna hyperparameter tuning 3](<images/subsample_optuna_visualization.png>)
+6.  **하이퍼파라미터 튜닝 및 특징 선택:**
+    * 자동화된 하이퍼파라미터 탐색을 위한 최첨단 오픈 소스 라이브러리인 **Optuna**를 사용하여 하이퍼파라미터 튜닝을 진행했습니다. https://optuna.org/
+      #### LightGBM 하이퍼파라미터 튜닝:
+        
+      > ![Optuna 1](<images/LGB_Optuna_20250720_1.png>)
+
+      > ![Optuna 2](<images/LGB_Optuna_20250720_2.png>)
+      
+      > ![Optuna 3](<images/LGB_Optuna_20250720_3.png>)
+      
+      > ![Optuna 4](<images/LGB_Optuna_20250720_4.png>)
+      
+      > ![Optuna 5](<images/LGB_Optuna_20250720_5.png>)
+
+
+
     * 머신러닝 모델 결과 설명을 위한 최첨단 오픈 소스 라이브러리인 **SHAP(SHapley Additive exPlanations)**을 특징 선택에 사용했습니다. https://shap.readthedocs.io/
         * ![SHAP feature importance](<images/feature_importance.png>)
 
-6.  **모델 평가:**
+7.  **모델 평가:**
     * 최종 모델의 성능을 주된 평가 지표인 **QWK(Quadratic Weighted Kappa)**를 사용하여 한 번도 보지 못한 테스트 세트로 평가했습니다.
     * "SHAP을 사용하여 어떤 특징들이 예측에 가장 많이 기여했는지 이해하기 위한 해석 가능성 분석을 수행했습니다.
 
