@@ -1,4 +1,7 @@
-# DRW - Crypto Market Prediction (Kaggle)
+# DRW - Crypto Market Prediction
+
+Kaggle 대회
+
 https://www.kaggle.com/competitions/drw-crypto-market-prediction/overview
 
 ---
