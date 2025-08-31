@@ -4,6 +4,19 @@ Kaggle 대회
 
 https://www.kaggle.com/competitions/drw-crypto-market-prediction/overview
 
+
+---
+
+## 프로젝트 개요
+
+Kaggle의 암호화폐 거래 데이터 예측 대회에 참가하여 **상위 11%** 성적을 거두었습니다.
+
+익명화된 거래 내역 데이터(X1~X780, label)를 활용해 미래의 타겟 변수를 예측하였으며, 다양한 Feature Engineering (nonlinear transforms, row-wise aggregations, combination interactions)을 적용했습니다. LightGBM과 SHAP을 이용한 Feature Selection을 수행하였고, Optuna로 Hyperparameter Tuning을 자동화하여 성능을 극대화했습니다. 예측 모델로는 LightGBM, XGBoost, CatBoost를 Ensemble 하였습니다.
+
+대회 평가지표로는 Pearson Correlation Coefficient가 사용되었으며, 저는 최종적으로 0.08230을 달성하였고, 상위 10개 팀의 평균 점수(0.11433: 아래 링크 참조)와 비교해 데이터 특성상 한계가 있었음을 확인할 수 있었습니다. 그러나 다양한 ML 기법을 적용하여 성능을 끌어올린 경험은 실무적인 인사이트로 이어졌습니다.
+
+https://www.kaggle.com/competitions/drw-crypto-market-prediction/leaderboard
+
 ---
 
 ## 기술 스택
@@ -17,18 +30,6 @@ https://www.kaggle.com/competitions/drw-crypto-market-prediction/overview
 - **Cross-validation**: TimeSeriesSplit (Scikit-learn)
 - **OS**: Linux (Ubuntu Desktop 24.04 LTS)
 - **IDE**: VSCode, Jupyter Notebook
-
----
-
-## 프로젝트 개요
-
-Kaggle의 암호화폐 거래 데이터 예측 대회에 참가하여 **상위 11%** 성적을 거두었습니다.
-
-익명화된 거래 내역 데이터(X1~X780, label)를 활용해 미래의 타겟 변수를 예측하였으며, 다양한 Feature Engineering (nonlinear transforms, row-wise aggregations, combination interactions)을 적용했습니다. LightGBM과 SHAP을 이용한 Feature Selection을 수행하였고, Optuna로 Hyperparameter Tuning을 자동화하여 성능을 극대화했습니다. 예측 모델로는 LightGBM, XGBoost, CatBoost를 Ensemble 하였습니다.
-
-대회 평가지표로는 Pearson Correlation Coefficient가 사용되었으며, 저는 최종적으로 0.08230을 달성하였고, 상위 10개 팀의 평균 점수(0.11433: 아래 링크 참조)와 비교해 데이터 특성상 한계가 있었음을 확인할 수 있었습니다. 그러나 다양한 ML 기법을 적용하여 성능을 끌어올린 경험은 실무적인 인사이트로 이어졌습니다.
-
-https://www.kaggle.com/competitions/drw-crypto-market-prediction/leaderboard
 
 ---
 
